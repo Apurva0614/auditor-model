@@ -80,6 +80,16 @@ auditorai validate --adapter-path outputs/models --data breast_cancer
 ==================================================
 ```
 
+## Benchmarks
+
+The following table shows the performance of AuditorAI across standard scikit-learn datasets:
+
+| Dataset       | Primary Model        | Auditor AUROC | Flag Rate |
+|---------------|----------------------|---------------|-----------|
+| Breast Cancer | RandomForest         | 0.93          | 2%        |
+| Wine          | GradientBoosting     | 0.75          | 3%        |
+| Digits        | LogisticRegression   | 0.93          | 4%        |
+
 ## How it works
 
 1. **Your model (any framework)** makes predictions on input data
