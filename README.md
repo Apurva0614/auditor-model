@@ -1,4 +1,4 @@
-# AuditorAI 🛡️
+# AuditorAI
 
 ### Stop your AI model from showing wrong predictions to users.
 
@@ -25,7 +25,7 @@
 
 ---
 
-## 🚀 Install
+## Install
 
 ```bash
 pip install auditorai
@@ -42,7 +42,7 @@ pip install auditorai
 
 ---
 
-## ⚡ Quickstart
+## Quickstart
 
 ### With a sklearn model
 
@@ -107,7 +107,7 @@ result = system.predict(texts_test)
 
 ---
 
-## 🔍 How it works
+## How it works
 
 ```
 Step 1:  Your model makes a prediction
@@ -124,7 +124,7 @@ Step 4:  Only confident predictions reach your users
 
 ---
 
-## 🖥️ CLI
+## CLI
 
 Works from the command line with zero Python:
 
@@ -147,7 +147,7 @@ auditorai run --help
 
 ---
 
-## 📊 What you get
+## What you get
 
 ### 1. Evaluation report (printed to terminal)
 
@@ -188,7 +188,7 @@ result["ai_predictions"]  # the actual predicted class labels
 
 ---
 
-## 🔌 Supported models
+## Supported models
 
 | Model type | Adapter | Extra install |
 |---|---|---|
@@ -223,7 +223,7 @@ system.train(X_val, y_val)
 
 ---
 
-## ❓ FAQ
+## FAQ
 
 **Q: Does my model need to support `predict_proba`?**
 No. sklearn models without `predict_proba` (like `SVC`) are automatically wrapped with `CalibratedClassifierCV` to produce calibrated probabilities. No extra code needed.
@@ -242,7 +242,7 @@ Yes. The auditor works on your model's probability outputs, not the raw inputs. 
 
 ---
 
-## 📁 Project structure
+## Project structure
 
 ```
 auditorai/
@@ -266,7 +266,7 @@ auditorai/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 ```bash
 git clone https://github.com/Apurva0614/Auditorai.git
@@ -279,12 +279,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ---
 
-## 📖 Research
+## Research
 
 This implementation is based on the auditor model framework for human-AI decision systems. The core idea — training a second model to predict when the primary AI is wrong, then suppressing those predictions to let a human decide — was formalized in *Auditor Models for Efficient Human-AI Collaboration* (De-Arteaga, M. et al., 2025, medRxiv). AuditorAI makes this research practical by providing a drop-in library that works with any ML framework.
 
 ---
 
-## 📄 License
+## License
 
 [MIT](LICENSE) — use it freely, commercially or otherwise.
