@@ -1,12 +1,18 @@
 """
-Tests for AuditorSystem (system.py).
+Tests for AuditorSystem (updated imports for auditorai package).
 """
 
 import numpy as np
 import pytest
 from sklearn.datasets import make_classification
 
-from src.system import AuditorSystem, run_pipeline
+from auditorai.core.system import AuditorSystem, audit
+from auditorai.adapters.sklearn_adapter import SklearnAdapter
+from auditorai.utils.data import split_data
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 
 @pytest.fixture
@@ -18,23 +24,32 @@ def synthetic_data():
     return X, y
 
 
+def _build_and_fit_adapter(X_train, y_train):
+    """Build a fitted SklearnAdapter."""
+    base_clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    calibrated = CalibratedClassifierCV(base_clf, cv=3)
+    pipeline = Pipeline([("scaler", StandardScaler()), ("clf", calibrated)])
+    pipeline.fit(X_train, y_train)
+    return SklearnAdapter(pipeline)
+
+
 def _trained_system(synthetic_data):
     """Helper: returns a trained AuditorSystem and splits."""
     X, y = synthetic_data
-    from src.utils import split_data
     X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
-    system = AuditorSystem()
-    system.train(X_train, y_train, X_val, y_val)
+    adapter = _build_and_fit_adapter(X_train, y_train)
+    system = AuditorSystem(adapter)
+    system.train(X_val, y_val)
     return system, X_train, X_val, X_test, y_train, y_val, y_test
 
 
-def test_run_pipeline_returns_system_and_splits(synthetic_data):
+def test_audit_returns_system_and_works(synthetic_data):
     X, y = synthetic_data
-    result = run_pipeline(X, y)
-    assert len(result) == 3
-    system, X_test, y_test = result
-    assert isinstance(X_test, np.ndarray)
-    assert isinstance(y_test, np.ndarray)
+    X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
+    adapter = _build_and_fit_adapter(X_train, y_train)
+    system = audit(adapter, X_val, y_val, X_test, y_test)
+    assert isinstance(system, AuditorSystem)
+    assert system.router_ is not None
 
 
 def test_train_produces_router(synthetic_data):
@@ -81,10 +96,8 @@ def test_n_shown_plus_suppressed_equals_total(synthetic_data):
 
 def test_auto_tune_changes_threshold(synthetic_data):
     system, _, X_val, _, _, y_val, _ = _trained_system(synthetic_data)
-    original_threshold = system.router_.threshold
     best_tau = system.auto_tune(X_val, y_val)
-    # The auto-tuned threshold may or may not differ from default;
-    # verify it was applied consistently.
+    # Verify it was applied consistently.
     assert system.router_.threshold == best_tau
     assert system.auditor_.threshold == best_tau
 
@@ -96,7 +109,8 @@ def test_save_load_roundtrip(tmp_path, synthetic_data):
     save_dir = str(tmp_path / "models")
     system.save(save_dir)
 
-    new_system = AuditorSystem()
+    # Need adapter to reload
+    new_system = AuditorSystem(system.adapter)
     new_system.load(save_dir)
     preds_after = new_system.predict(X_test)["ai_predictions"]
 
@@ -104,7 +118,11 @@ def test_save_load_roundtrip(tmp_path, synthetic_data):
 
 
 def test_predict_before_train_raises():
-    system = AuditorSystem()
+    from sklearn.ensemble import RandomForestClassifier as RF
+    rf = RF(n_estimators=10, random_state=42)
+    rf.fit(np.random.rand(20, 5), np.array([0]*10 + [1]*10))
+    adapter = SklearnAdapter(rf)
+    system = AuditorSystem(adapter)
     X = np.random.rand(10, 5)
     with pytest.raises(RuntimeError):
         system.predict(X)

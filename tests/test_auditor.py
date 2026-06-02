@@ -1,13 +1,17 @@
 """
-Tests for AuditorModel.
+Tests for AuditorModel (updated imports for auditorai package).
 """
 
 import numpy as np
 import pytest
 from sklearn.datasets import make_classification
 
-from src.auditor_model import AuditorModel
-from src.primary_model import PrimaryModel
+from auditorai.core.auditor import AuditorModel
+from auditorai.adapters.sklearn_adapter import SklearnAdapter
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 
 @pytest.fixture
@@ -21,11 +25,13 @@ def dataset():
 
 @pytest.fixture
 def trained_primary(dataset):
-    """PrimaryModel fitted on the first 200 samples."""
+    """SklearnAdapter wrapping a fitted model, trained on the first 200 samples."""
     X, y = dataset
-    model = PrimaryModel("random_forest")
-    model.fit(X[:200], y[:200])
-    return model
+    base_clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    calibrated = CalibratedClassifierCV(base_clf, cv=3)
+    pipeline = Pipeline([("scaler", StandardScaler()), ("clf", calibrated)])
+    pipeline.fit(X[:200], y[:200])
+    return SklearnAdapter(pipeline)
 
 
 def test_build_features_shape(dataset, trained_primary):
