@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.5,
+        default=0.40,
         help="Starting auditor suppression threshold.",
     )
     parser.add_argument(

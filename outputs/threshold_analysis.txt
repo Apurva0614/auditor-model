@@ -1,0 +1,48 @@
+THRESHOLD SWEEP ANALYSIS
+========================
+Dataset: Synthetic (n=2000, n_features=20, n_informative=10, flip_y=0.08)
+Primary model: Random Forest (calibrated)
+Validation set: 400 samples | Test set: 400 samples
+Human accuracy (simulated): 0.72
+
+FULL SWEEP TABLE
+----------------
+ tau  | supp_rate | joint_acc | acc_gain  | precision |  recall
+------+-----------+-----------+-----------+-----------+---------
+ 0.30 |     8.0%  |    88.8%  |   +0.26%  |    31.2%  |   21.7%
+ 0.40 |     6.5%  |    89.2%  |   +0.68%  |    38.5%  |   21.7%
+ 0.50 |     5.0%  |    88.8%  |   +0.35%  |    35.0%  |   15.2%
+ 0.55 |     4.5%  |    88.7%  |   +0.24%  |    33.3%  |   13.0%
+ 0.60 |     2.8%  |    88.0%  |   -0.52%  |     9.1%  |    2.2%
+ 0.65 |     2.5%  |    88.0%  |   -0.45%  |    10.0%  |    2.2%
+ 0.70 |     2.5%  |    88.0%  |   -0.45%  |    10.0%  |    2.2%
+ 0.75 |     2.2%  |    88.1%  |   -0.38%  |    11.1%  |    2.2%
+
+SELECTION CRITERIA
+------------------
+Primary: highest accuracy_gain where suppression_rate < 10% AND precision > 40%.
+Fallback: highest accuracy_gain where suppression_rate < 12%.
+
+No tau in the sweep achieved precision > 40% (a known limitation of auditing 
+random uniform noise in synthetic data — real-world errors cluster by feature 
+pattern, making them more learnable).
+
+CHOSEN BEST TAU: 0.40
+----------------------
+Justification: tau=0.40 delivers the highest accuracy gain (+0.68%) across all
+tested thresholds while keeping suppression rate at 6.5% — well below the 12%
+fallback ceiling. Lower thresholds (0.30) suppress more but without proportional
+gains in recall; higher thresholds (>= 0.55) show diminishing or negative gains
+as the auditor becomes too conservative to catch any real errors.
+
+FINAL METRICS AT tau=0.40
+---------------------------
+  AI-only accuracy:      88.5%
+  Joint sys accuracy:    89.2%
+  Accuracy gain:        +0.68%
+  Auditor AUROC:         0.728
+  Suppression rate:       6.5%
+  Cases shown:           374
+  Cases suppressed:       26
+  Auditor precision:     38.5%
+  Auditor recall:        21.7%
