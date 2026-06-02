@@ -1,112 +1,168 @@
-# auditor-model
+# AuditorAI
 
-## What this does
+**Universal auditor model for human-AI systems.**
 
-`auditor-model` trains a secondary "auditor" classifier that learns to predict when a primary AI model is likely to be wrong. When the auditor flags a prediction as unreliable, it suppresses the AI output and defers the decision to a human, improving overall system accuracy.
+AuditorAI wraps any AI model -- sklearn, PyTorch, HuggingFace, or LLM APIs -- with a second model that learns when the first one is likely wrong, and suppresses those predictions before they reach the human. The result is higher joint accuracy with fewer wrong AI predictions shown to users.
 
-## Quickstart
+## Install
 
 ```bash
-pip install -r requirements.txt
-python main.py
+pip install auditorai                    # core (sklearn models)
+pip install "auditorai[pytorch]"         # + PyTorch models
+pip install "auditorai[hf]"              # + HuggingFace models
+pip install "auditorai[openai]"          # + OpenAI models
+pip install "auditorai[anthropic]"       # + Anthropic models
+pip install "auditorai[all]"             # everything
 ```
 
-### Python API
+## Quickstart -- any model in 5 lines
 
 ```python
-from sklearn.datasets import make_classification
-from src.system import run_pipeline
-from src.evaluate import run_full_evaluation
+from sklearn.ensemble import GradientBoostingClassifier
+from auditorai import AuditorSystem, wrap
 
-X, y = make_classification(n_samples=2000, n_features=20, n_informative=10,
-                            flip_y=0.08, random_state=42)
+model = GradientBoostingClassifier().fit(X_train, y_train)
+system = AuditorSystem(wrap(model))
+system.train(X_val, y_val)
+system.auto_tune(X_val, y_val)
+result = system.predict(X_test)
+```
 
-system, X_test, y_test = run_pipeline(X, y)
-metrics = run_full_evaluation(system, X_test, y_test)
+## Supported model types
+
+| Model type | How to wrap | Example |
+|---|---|---|
+| **sklearn** | `wrap(model)` | `wrap(RandomForestClassifier().fit(X, y))` |
+| **PyTorch** | `wrap(model, adapter_type="pytorch", n_classes=N)` | `wrap(my_nn_module, n_classes=3)` |
+| **HuggingFace pipeline** | `wrap(pipe, adapter_type="huggingface")` | `wrap(pipeline("text-classification", ...))` |
+| **HuggingFace model+tokenizer** | `HuggingFaceAdapter(model, tokenizer=tok)` | See `examples/huggingface_example.py` |
+| **OpenAI** | `wrap("gpt-4o", adapter_type="openai", ...)` | `wrap("gpt-4o-mini", parse_response=fn, n_classes=2)` |
+| **Anthropic** | `wrap("claude-sonnet-4-6", adapter_type="anthropic", ...)` | `wrap("claude-sonnet-4-6", parse_response=fn, n_classes=3)` |
+| **Custom** | Subclass `ModelAdapter` | See `examples/custom_model_example.py` |
+
+## CLI usage
+
+```bash
+# Train and evaluate with built-in data
+auditorai run --data breast_cancer --report
+
+# Sweep thresholds
+auditorai sweep --data breast_cancer --steps 10
+
+# Run with specific settings
+auditorai run --data breast_cancer --model-type gradient_boosting --threshold 0.65 --no-tune --report
+
+# Validate a saved auditor on new data
+auditorai validate --adapter-path outputs/models --data breast_cancer
+```
+
+### Example CLI output
+
+```
++======================================+
+|  AuditorAI v0.2.0                   |
+|  Universal AI Prediction Auditor     |
++======================================+
+
+  [17:00:37] Starting AuditorAI run...
+  [17:00:38] Loaded: 569 samples, 30 features
+  [17:00:42] Optimal threshold: tau=0.1000
+
+==================================================
+  AUDITOR SYSTEM - EVALUATION REPORT
+==================================================
+  AI-only accuracy:         94.7%
+  Joint system accuracy:    94.2%
+  Auditor AUROC:            0.512
+  Suppression rate:         1.8%
+==================================================
 ```
 
 ## How it works
 
-The **PrimaryModel** is a calibrated scikit-learn classifier (random forest, gradient boosting, or logistic regression) that makes the initial prediction and outputs class probabilities. The **AuditorModel** is a gradient-boosting classifier trained on a held-out validation set to predict when the primary model is wrong. It uses four uncertainty signals derived from the primary's probability output: confidence (max probability), predicted class, Shannon entropy, and margin (gap between top-two probabilities). The **Router** applies a threshold to the auditor's P(wrong) score to decide per sample whether to show the AI prediction or suppress it and route to a human reviewer. The joint accuracy combines AI accuracy on shown cases with human accuracy on suppressed cases, yielding an improvement over deploying the AI alone.
+1. **Your model (any framework)** makes predictions on input data
+2. **The adapter** wraps your model into a unified `predict()` + `predict_proba()` interface
+3. **The auditor** (a gradient-boosted classifier) learns to predict when your model is wrong, using features derived from the model's own uncertainty signals (confidence, entropy, margin between top predictions)
+4. **The router** uses the auditor's output to decide: show the AI prediction to the human, or suppress it (defer to human judgment)
+5. **Result**: the human sees only the predictions the AI is confident about, improving overall joint human-AI accuracy
+
+The auditor must be trained on held-out validation data -- never the same data your primary model trained on.
 
 ## Project structure
 
 ```
-auditor-model/
-├── main.py                  # CLI entry point
-├── requirements.txt         # Python dependencies
-├── setup.py                 # Package setup
-├── README.md                # This file
-├── src/
-│   ├── __init__.py
-│   ├── utils.py             # Seed, data loading, splitting, model I/O, logging
-│   ├── primary_model.py     # Calibrated primary classifier
-│   ├── auditor_model.py     # Auditor: learns primary failure modes
-│   ├── router.py            # Threshold-based routing and sweep
-│   ├── system.py            # End-to-end orchestration
-│   └── evaluate.py          # Reports and plots
-├── tests/
-│   ├── test_primary.py      # Unit tests for PrimaryModel
-│   ├── test_auditor.py      # Unit tests for AuditorModel
-│   └── test_system.py       # Unit tests for AuditorSystem
-├── docs/
-│   └── architecture.md      # Design rationale and extension guide
-├── data/
-│   ├── raw/                 # Raw input CSV files (gitignored)
-│   └── processed/           # Processed data (gitignored)
-├── outputs/
-│   ├── models/              # Saved model files (gitignored)
-│   ├── score_dist.png       # Auditor score distribution plot
-│   ├── threshold_sweep.png  # Accuracy gain vs. threshold plot
-│   └── breakdown.png        # Decision breakdown bar chart
-└── notebooks/               # Jupyter notebooks (optional)
+auditorai/
+  __init__.py              # Public API exports
+  adapters/
+    __init__.py             # Lazy imports for optional deps
+    base.py                 # ModelAdapter ABC + wrap() function
+    sklearn_adapter.py      # Wraps sklearn models
+    pytorch_adapter.py      # Wraps PyTorch nn.Module
+    huggingface_adapter.py  # Wraps HF pipelines & models
+    api_adapter.py          # Wraps OpenAI, Anthropic, custom APIs
+  core/
+    __init__.py
+    auditor.py              # AuditorModel (error predictor)
+    router.py               # Router (show vs. suppress)
+    system.py               # AuditorSystem (orchestrator) + audit()
+    evaluate.py             # Reports and plots
+  cli/
+    __init__.py
+    main.py                 # CLI entry point (run/sweep/validate)
+  utils/
+    __init__.py
+    data.py                 # Data loading, splitting, load_any()
+    logging.py              # Logger setup
+examples/
+  sklearn_example.py        # Runnable sklearn demo
+  pytorch_example.py        # Runnable PyTorch demo
+  huggingface_example.py    # Runnable HuggingFace demo
+  openai_example.py         # Runnable OpenAI API demo
+  custom_model_example.py   # Custom adapter pattern demo
+tests/
+  adapters/
+    test_sklearn_adapter.py
+    test_pytorch_adapter.py
+    test_api_adapter.py
+  test_auditor.py
+  test_primary.py
+  test_system.py
+src/                        # Original source (preserved)
 ```
 
-## CLI usage
+## Writing a custom adapter
 
-```
-python main.py [OPTIONS]
-
-  --data PATH         CSV dataset path (last col = label).
-                      Default: generate synthetic data.
-  --model TYPE        random_forest | gradient_boosting | logistic
-                      Default: random_forest
-  --threshold FLOAT   Starting auditor threshold. Default: 0.5
-  --human-acc FLOAT   Simulated human accuracy. Default: 0.72
-  --no-tune           Skip auto_tune if set.
-  --save-dir PATH     Model save directory. Default: outputs/models
-  --output-dir PATH   Plot output directory. Default: outputs
-```
-
-## Tuning the threshold
-
-The suppression threshold **tau** controls how aggressively the auditor flags predictions. A lower tau suppresses more predictions (higher recall, lower precision); a higher tau suppresses fewer (lower recall, higher precision).
-
-`auto_tune` sweeps tau from 0.1 to 0.9 in 17 steps and selects the value that maximises joint accuracy gain. You can run this sweep explicitly:
+For any model not covered by the built-in adapters, subclass `ModelAdapter`:
 
 ```python
-df = system.router_.sweep_thresholds(X_val, y_val, human_accuracy=0.80)
-print(df.to_string(index=False))
-```
+from auditorai import ModelAdapter, AuditorSystem
+import numpy as np
 
-## Running tests
+class MyAdapter(ModelAdapter):
+    def __init__(self, model):
+        self.model = model
 
-```bash
-# All tests
-pytest tests/ -v
+    def predict(self, X) -> np.ndarray:
+        scores = self.model.raw_predict(X)
+        return (scores > 0.5).astype(int)
 
-# With coverage
-pytest tests/ -v --cov=src --cov-report=term-missing
+    def predict_proba(self, X) -> np.ndarray:
+        scores = self.model.raw_predict(X)
+        return np.column_stack([1 - scores, scores])
+
+# Use it
+system = AuditorSystem(MyAdapter(my_model))
+system.train(X_val, y_val)
 ```
 
 ## Research context
 
-This system implements the auditor-model paradigm described in:
+This implementation is based on the auditor model framework for human-AI decision systems, as described in:
 
-> Jabbour, S., et al. (2025). *An Auditor Model for AI-Assisted Decision-Making*. medRxiv. https://doi.org/10.1101/2023.04.03.23288014
-
-The core idea — training a meta-model to predict primary AI errors and suppress unreliable cases before they reach end users — has been validated in clinical AI settings where undetected AI errors have high costs.
+> **Auditor Models for Efficient Human-AI Collaboration**
+> De-Arteaga, M. et al. (2025). *medRxiv*.
+> The auditor model learns when the AI is likely wrong and suppresses those predictions, improving joint human-AI accuracy.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT
