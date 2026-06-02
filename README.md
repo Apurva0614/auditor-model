@@ -88,6 +88,8 @@ auditorai validate --adapter-path outputs/models --data breast_cancer
 
 The auditor must be trained on held-out validation data -- never the same data your primary model trained on.
 
+##for more understanding refer to **Understanding Auditorai** from the docs 
+
 ## Project structure
 
 ```
