@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Router: decides which samples the AI system should answer vs. suppress.
 """

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Auditor model that predicts when the primary model is likely to be wrong.
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 AuditorSystem: end-to-end orchestration using the adapter interface.
 
