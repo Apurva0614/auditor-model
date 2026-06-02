@@ -38,27 +38,25 @@ class AuditorModel:
             suppressed. Defaults to 0.5.
     """
 
-    def __init__(self, threshold: float = 0.5) -> None:
+    def __init__(self, threshold: float = 0.5, feature_fn: object = None) -> None:
         self.threshold = threshold
+        self.feature_fn = feature_fn
         self.pipeline_: Pipeline | None = None
 
     def _build_features(
         self, X: np.ndarray, primary_probas: np.ndarray
     ) -> np.ndarray:
-        """Augment X with four uncertainty-derived columns.
+        """Augment X with uncertainty-derived columns and optional custom features.
 
         CRITICAL: X is never modified in place. A new array is returned.
 
-        The four appended features are:
+        The default four appended features are:
             1. confidence:      max probability per row,          shape (n,1)
             2. predicted_class: argmax per row cast to float,     shape (n,1)
             3. entropy:         -sum(p * log(p + 1e-10)) per row, shape (n,1)
             4. margin:          top-1 prob - top-2 prob,          shape (n,1)
 
-        Entropy and margin provide richer uncertainty signals than raw
-        confidence alone: a high-confidence wrong prediction has low
-        entropy but the margin captures the gap to the second-best class,
-        making the pair complementary even in multiclass settings.
+        If feature_fn is provided, its output is concatenated to the default 4 features.
 
         Args:
             X: Original feature array of shape (n_samples, n_features).
@@ -66,7 +64,7 @@ class AuditorModel:
                 (n_samples, n_classes).
 
         Returns:
-            Augmented array of shape (n_samples, n_features + 4).
+            Augmented array of shape (n_samples, n_features + 4 + n_custom_features).
         """
         n = X.shape[0]
 
@@ -87,7 +85,17 @@ class AuditorModel:
         else:
             margin = confidence  # degenerate single-class case
 
-        return np.hstack([X, confidence, predicted_class, entropy, margin])
+        base_features = [X, confidence, predicted_class, entropy, margin]
+
+        if self.feature_fn is not None:
+            predictions = np.argmax(primary_probas, axis=1)
+            custom_feats = self.feature_fn(primary_probas, predictions)
+            custom_feats = np.asarray(custom_feats)
+            if custom_feats.ndim == 1:
+                custom_feats = custom_feats.reshape(-1, 1)
+            base_features.append(custom_feats)
+
+        return np.hstack(base_features)
 
     def fit(
         self,
